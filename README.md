@@ -68,3 +68,9 @@
    configuration every attempt has been made to make it modular in design so that the builder can swap out
    modules at will.  It should be fairly straight forward to adapt to the builder's hardware selection
    of switches, buttons and knobs or even alternate displays.
+   
+   REQUIRED EXTERNAL LIBRARIES:
+   IC746CAT - https://github.com/kk4das/IC746CAT
+   For LCD - LiquidCrystal_I2C
+   For TFT - Adafruit_GFX.h, and Adafruit_ILI9341.h
+   For Nextion - https://github.com/itead/ITEADLIB_Arduino_Nextion (with updates)
