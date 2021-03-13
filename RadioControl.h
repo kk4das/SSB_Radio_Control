@@ -80,6 +80,7 @@
 #define ENCODER_B      3                  // Rotary Lib Default - Encoder pin B  D3 (interrupt pin)
 #define PTT_SENSE      4                  // Detect Mic PT
 #define PTT            5                  // LOW=Rx, HIGH=Tx
+#define TONE_PIN       8                  // Audio out for tune tone
 
 // Dual Band Pins (requires dual band mod)
 #define BAND_BTN       6                  // Band Switch momentary button
@@ -91,7 +92,6 @@
 #define ENCODER_BTN    A3                 // Rotary Lib Default - Encoder push button
 #define I2C_SDA        A4                 // I2C SDA Pin
 #define I2C_SCL        A5                 // I2C SCL Pin
-#define TONE_PIN       A6                 // Audio out for tune tone
 
 //  Smeter
 #define SMETER_PIN     A7                 // Requires Signal Strength Sensor

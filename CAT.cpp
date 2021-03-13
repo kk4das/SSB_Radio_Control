@@ -16,20 +16,6 @@ IC746 radio = IC746();
 #define MODE_USB 01
 #define MODE_CW 02
 
-// TX Rx State
-//     FT857D combine TX and RX status
-//     0b abcdefgh
-//      a = 0 = PTT on
-//      a = 1 = PTT off
-//      b = 0 = HI SWR off
-//      b = 1 = HI SWR on
-//      c = 0 = split on
-//      c = 1 = split off
-//      d = dummy data
-//      efgh = SWR meter data ??
-
-
-
 
 // function to run when we must put radio on TX/RX
 // If PTT requests transmit and the rig is not already transmitting, start TX
