@@ -70,7 +70,7 @@
    of switches, buttons and knobs or even alternate displays.
    
    REQUIRED EXTERNAL LIBRARIES:
-   IC746CAT - https://github.com/kk4das/IC746CAT
-   For LCD - LiquidCrystal_I2C
-   For TFT - Adafruit_GFX.h, and Adafruit_ILI9341.h
-   For Nextion - https://github.com/itead/ITEADLIB_Arduino_Nextion (with updates)
+   * IC746CAT - https://github.com/kk4das/IC746CAT
+   * For LCD - LiquidCrystal_I2C
+   * For TFT - Adafruit_GFX.h, and Adafruit_ILI9341.h
+   * For Nextion - https://github.com/itead/ITEADLIB_Arduino_Nextion (with updates - see notes)
