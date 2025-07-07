@@ -2,6 +2,7 @@
 //  Encoder fuctions
 //
 #include "RadioControl.h"
+#include "ButtonState.h"
 
 //#DEFINE DEBUG_ENC
 
@@ -26,8 +27,8 @@ bool incrementChanged = false;
 // when multiplied by tuning increment tells what the frequency change on
 // on the active VFO will be
 // Encoder button control
-extern byte EncButtonState;
-extern byte lastEncButtonState;
+extern ButtonState EncButton;
+
 
 ///////////////////////////////////////////////////////////
 //      ************* ISR ****************               //
@@ -189,25 +190,20 @@ void CheckEncoder() {
 // Cycle through tuning increment values on button press
 // 10, 100, 1K, 10K, 100K, 1M
 //********************CheckIncrement*******************************************
-void AdvanceIncrement() {
-  if (increment == 10) {
-    increment = 100;
+void AdvanceIncrement(bool inc) {
+  if ( inc == true )
+  {
+     if (increment == 1000000)
+       increment = 1;
+     increment *= 10;
   }
-  else if (increment == 100) {
-    increment = 1000;
+  else
+  {
+    if (increment == 10)
+      increment = 10000000;
+    increment /= 10;
   }
-  else if (increment == 1000) {
-    increment = 10000;
-  }
-  else if (increment == 10000) {
-    increment = 100000;
-  }
-  else if (increment == 100000) {
-    increment = 1000000;
-  }
-  else {
-    increment = 10;
-  }
+
   displayIncr(increment);
   incrementChanged = true;
   startSettingsTimer();
@@ -215,27 +211,13 @@ void AdvanceIncrement() {
 
 void CheckIncrement () {
 
-  EncButtonState = encoder.buttonState();
-  //EncButtonState = digitalRead(ENCODER_BTN);
-#ifdef DEBUG
-  sprintf(debugmsg, "Encoder button state: %d", EncButtonState);
-  Serial.println(debugmsg);
-  Delay(1000);
-#endif
-  if (EncButtonState != lastEncButtonState) {
-#ifdef DEBUG
-    sprintf(debugmsg, "Encoder button state: %d", EncButtonState);
-    Serial.println(debugmsg);
-#endif
-    if (EncButtonState == LOW) {
-      AdvanceIncrement();
+  ButtonState::BUTTON_STATE state = EncButton.CheckButton(encoder.buttonState());
 
-    }
-    lastEncButtonState = EncButtonState;
-    Delay(50);
-    EncButtonState = encoder.buttonState();  //debounce
-    //EncButtonState = digitalRead(ENCODER_BTN);
-  }
+  if ( state == ButtonState::SHORT_PRESS )
+    AdvanceIncrement(true);
+  else if ( state == ButtonState::LONG_PRESS )
+    AdvanceIncrement(false);
+
 }
 
 void setupEncoder() {

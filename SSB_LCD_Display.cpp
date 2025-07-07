@@ -45,23 +45,35 @@ void displayBanner(String s) {
   lcd.print(VERSION);
 }
 
-  
+//#define SUPPORT+++
 //************************displaySmeter****************************
 void displaySMeter(byte level) {
   int i;
-  lcd.setCursor(6, 2);
-  lcd.print("S:");
+  String msg;
+  lcd.setCursor(16, 2);
+  lcd.print("    ");
+  if (level == MAXSLEVELS)
+	  return;
+#ifdef SUPPORT+++
+  lcd.setCursor(15, 2);
+#else
+  lcd.setCursor(16, 2);
+#endif
   for (i = 0; i < MAXSLEVELS; i++) {
     if (level >= i) {
       if (i < 9) {
-        lcd.print(i + 1);
+    	msg = F("S");
+    	msg+=(i+1);
       } else {
-        lcd.print("+");
+        msg+="+";
       }
-    } else {
-      lcd.print(" ");
     }
   }
+#ifdef SUPPORT+++
+  lcd.print(msg);
+#else
+  lcd.print(msg.substring(0, 4));
+#endif
 }
 
 
@@ -139,17 +151,22 @@ extern void displayAltVFO(uint32_t freq) {
 
 //************************displayMode*******************************
 //
-// displaySideband(mode)
-//   Updates the current mode (sideband) indicator U or L
+// displayMode(mode)
+//   Updates the current mode display
 //
-void displayMode(int mode) {
-  char sb = ' ';
+void displayMode(byte mode) {
+  String sb;
 
-  if (mode == USB) {
-    sb = 'U';
-  } else if (mode == LSB) {
-    sb = 'L';
+  switch ( mode) {
+    case L_SSB: sb = "LSB"; break;
+    case U_SSB: sb = "USB"; break;
+#ifdef CW
+    case L_CW:  sb = "LCW"; break;
+    case U_CW:  sb = "UCW"; break;
+#endif
+    default:    sb = "USB"; break;  // Default fallback
   }
+
   lcd.setCursor(13, 0);
   lcd.print(sb);
 }
@@ -209,14 +226,18 @@ void displayTune(bool On) {
   }
 }
 
+// Display 12 characters max on second line
 void displayDebug(String msg) {
-  lcd.setCursor(7, 2);
-  lcd.print(msg);
+  if ( msg.length() == 0 )
+    msg = "             ";
+
+  lcd.setCursor(3, 2);
+  lcd.print(msg.substring(0, 12));
 }
 
 //************************displaySplit*******************************
 //
-// displayTune(split)
+// displaySplit(split)
 //   If split is TRUE displays SPLIT message else clears it
 //
 void displaySplit(boolean splt) {
@@ -238,7 +259,7 @@ void displaySetup(String banner,
                   uint32_t vfoActfreq, uint32_t vfoAltfreq,
                   uint32_t activeVFO,
                   int tx_rx,
-                  int sideband,
+                  int sideband,  // Note: parameter kept for compatibility but mode is used
                   boolean split,
                   uint32_t increment,
                   byte s_meter) {
@@ -253,9 +274,9 @@ void displaySetup(String banner,
   lcd.setCursor(0,0);
   lcd.print(F("A"));
 
-  // Line 0 - sideband indicator
+  // Line 0 - mode indicator
   lcd.setCursor(14,0);
-  lcd.print(F("SB"));
+  lcd.print(F("SB"));  // Keep "SB" label for display compatibility
 
   // Line 1 VFO B
   lcd.setCursor(0,1);
@@ -269,7 +290,7 @@ void displaySetup(String banner,
   displayAltVFO(vfoAltfreq);
   displayVFOAB(activeVFO);
   displayTxRx(tx_rx);
-  displayMode(sideband);
+  displayMode(mode);  // Use global mode instead of sideband parameter
   displaySplit(split);
   displayIncr(increment);
 #ifdef SMETER

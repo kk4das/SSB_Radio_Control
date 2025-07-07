@@ -16,13 +16,14 @@
 
 // ===========================Function Prototypes==================================
 
+extern void displayDebug(String msg);
 extern void displaySMeter(byte level);
 extern void displayBanner(String s);
 extern void displayActVFO(uint32_t freq);
 extern void displayAltVFO(uint32_t freq);
 extern void displayVFOAB(int vfo);
 extern void displayTxRx(int tx_rx);
-extern void displayMode(int mode);
+extern void displayMode(byte mode);
 extern void displayIncr(uint32_t increment);
 extern void displayTune(boolean on_off);
 extern void displaySplit(boolean splt); 
