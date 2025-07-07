@@ -170,7 +170,7 @@ NexTouch *nex_listen_list[] = {
 //  HMI_send_command(cmd.c_str());
 //  
 ///////////////////////////////////////////////////////////////////////////
-void HMI_send_command(char* cmd) {
+void HMI_send_command(const char* cmd) {
 
 /*
 // Send the command 
@@ -285,6 +285,12 @@ void displayBanner(String s) {
   HMI_send_command(cmd.c_str());
 }
 
+//
+// Use the banner line to display debug messages
+void displayDebug(String msg) {
+  displayBanner(msg);
+}
+
 void displayVFOAB(int vfo) {
   String cmd;
   cmd = F(VAB_NAME);
@@ -325,12 +331,17 @@ void displayTxRx(int tx_rx) {
 
 }
 
-void displayMode(int mode) {
+void displayMode(byte mode) {
   String modeString;
-  if (mode == USB) {
-    modeString = F("USB");
-  } else {
-    modeString = F("LSB");
+  switch ( mode )
+  {
+    case U_SSB:  modeString = F("USB"); break;
+    case L_SSB:  modeString = F("LSB"); break;
+#ifdef CW
+    case U_CW: modeString = F("UCW"); break;
+    case L_CW: modeString = F("LCW"); break;
+#endif
+    default: modeString = F("USB"); break;  // fallback
   }
   bSideband.setText(modeString.c_str());
 
@@ -414,7 +425,7 @@ void bVFOPopCallback(void *ptr) {
 
 // LSB/USB Button
 void bSidebandPopCallback(void *ptr) {
- SwapSB();
+ ChangeMode();  // Changed from SwapSB() to ChangeMode()
 }
 
 // Tune Plus (increase VFO)
@@ -434,7 +445,7 @@ void bTunePopCallback(void *ptr) {
 
 // Tuning Increment Change
 void bIncrementPopCallback(void *ptr) {
-  AdvanceIncrement();
+  AdvanceIncrement(true);
 }
 
 // Split on/off
@@ -460,8 +471,10 @@ void bAtoBPopCallback(void *ptr) {
   
   if (active_vfo == VFOA) {
     vfoBfreq = vfoAfreq;
+    vfoBmode = vfoAmode;  // Copy mode instead of just frequency
   } else {
     vfoAfreq = vfoBfreq;
+    vfoAmode = vfoBmode;  // Copy mode instead of just frequency
   }
   displayAltVFO(vfoAfreq);  // update the Alt VFO display
 
@@ -471,6 +484,9 @@ void bAtoBPopCallback(void *ptr) {
 // Setup
 // Called once at startup
 //
+
+
+
 void displaySetup(String banner,
                   uint32_t vfoActfreq, uint32_t vfoAltfreq,
                   uint32_t activeVFO,
@@ -504,7 +520,7 @@ void displaySetup(String banner,
   displayAltVFO(vfoAltfreq);
   displayVFOAB(activeVFO);
   displayTxRx(tx_rx);
-  displayMode(sideband);
+  displayMode(mode);  // Use mode instead of sideband parameter
   displaySplit(split);
   displayIncr(increment);
   displaySMeter(s_meter);

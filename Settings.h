@@ -3,9 +3,9 @@
 
 // Function prototypes
 
-extern void setupSettings();
+extern bool setupSettings();
 extern void initSettings();
-extern void readSettings();
+extern bool readSettings();
 extern void writeSettings();
 extern void startSettingsTimer();
 extern void CheckSettings();

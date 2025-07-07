@@ -75,7 +75,7 @@
  * Wherever possible I have used #defines  for any number that will be used more than one place in the code.  
  * For example  #define DSP_VFO_ACT_X 60 defines the X coordinate (how far from the left of the screen) 
  * of the Active VFO frequency display. You will see multiple references to DSP_VFO_ACT_X  throughout the code, 
- * but I never use the hardcoded number 60 again.  Change it once – and it is changed throughout.
+ * but I never use the hardcoded number 60 again.  Change it once â€“ and it is changed throughout.
  * 
  * Taking the S-Meter as an example:
  * 
@@ -88,7 +88,7 @@
  * and negative values move you away from the origin. For displays  0,0, the origin, is always upper left hand corner 
  * of the display and you only use positive numbers for the coordinates  +X is pixels from the left edge, +Y is pixels 
  * down from the top. This particular example based on a 320x240 display but should be easily portable to other 
- * display sizes – but you have to keep in mind how the coordinate system works.
+ * display sizes â€“ but you have to keep in mind how the coordinate system works.
  * 
  * SCREEN LAYOUT
  * Here are a few notes about how the demonstration display is laid out.  This should help you understand the design 
@@ -96,7 +96,7 @@
  * 
  * The VFO display is setup for a dual VFO rig.  The currently Active VFO is always on the top and the alternate VFO 
  * is just below it.  Your code will need to keep track of whether VFO A or VFO B is currently selected and call the 
- * display routines to update the display.   I’ll describe how the VFO displays are are defined and that will give you 
+ * display routines to update the display.   Iâ€™ll describe how the VFO displays are are defined and that will give you 
  * an idea how you might modify or enhance the display.
  * 
  * Active VFO - top center of the screen
@@ -109,7 +109,7 @@
  * #define DSP_VFO_ACT_SZ 3                  // This is text size from Arduino TFT, values 1-5 1 is small 5 is large 
  *                                           // (2 was too small, 4 was too large, 3 was just right)
  *                                           
- * Alternate VFO – the second VFO is placed directly below the Active VFO on the screen.  There are a couple of things of  
+ * Alternate VFO â€“ the second VFO is placed directly below the Active VFO on the screen.  There are a couple of things of  
  * interest here.  For the X coordinate, instead of putting in a hard coded number I refer back to the #define that I used 
  * for the Active VFO (DSP_VFO_ACT).  That way, if I want to move VFO section to a different part of the screen I only need 
  * to change one number DSP_VFO_ACT_X, and the alternate VFO will move as well.  Figuring out the Y coordinate for the 
@@ -117,16 +117,16 @@
  * I need to calculate where how far down the display I need to go to place the second VFO.  To do that I need calculate 
  * how many pixels tall the text characters in the Active VFO are and use that as an offset.  It turns out we have everything 
  * we need already defined.  CH_W and CH_H are #defines that specify the height and width of a text character in pixels for 
- * TFT font size 1.  Size 2 through 5 are even multiples of that – so font height for size 2 is 2*CH_H pixels and font width 
+ * TFT font size 1.  Size 2 through 5 are even multiples of that â€“ so font height for size 2 is 2*CH_H pixels and font width 
  * for size 4 is 4*CH_W pixels and so on.  so we have everything we need to calculate how many pixels the Active VFO takes 
- * on the screen – we multiply the font size by the character height and add 16 pixels offset. The 16 was determined by 
+ * on the screen â€“ we multiply the font size by the character height and add 16 pixels offset. The 16 was determined by 
  * experimentation for something that looked good.  The code looks like this:
  * 
  * #define DSP_VFO_ALT_X DSP_VFO_ACT_X
  * #define DSP_VFO_ALT_Y DSP_VFO_ACT_Y + (DSP_VFO_ACT_SZ * CH_H) + 16 
  * 
  * Take a look the other sections of the display code and you will see similar references and calculations.  The VFO A//B 
- * indicator and LSB/USB mode indicator, for example are similarly “pinned” to the Active VFO display, so if you move the 
+ * indicator and LSB/USB mode indicator, for example are similarly â€œpinnedâ€� to the Active VFO display, so if you move the 
  * Active VFO display to another screen location they will move also.
  *
  * In summary - each object is on the display is defined by a set of constants that indicate the X,Y coordinates
@@ -469,11 +469,18 @@ void displayTxRx(int tx_rx) {
 ///////////////////////////////////////////////////////////////////////////
 void displayMode(int mode) {
   String mode_str;
-  if (mode == LSB) {
-    mode_str = F("LSB");
-  } else {
-    mode_str = F("USB");
+  switch ( mode )
+  {
+    case USB:  modeString = F("USB"); break;
+    case LSB:  modeString = F("LSB"); break;
+    case U_CW: modeString = F("UCW"); break;
+    case L_CW: modeString = F("LCW"); break;
   }
+//  if (mode == LSB) {
+//    mode_str = F("LSB");
+//  } else {
+//    mode_str = F("USB");
+//  }
   displayDrawTextBox(mode_str,DSP_MODE_X, DSP_MODE_Y, DSP_MODE_SZ, DSP_MODE_COLOR, DSP_MODE_BK);
 }
 
@@ -542,7 +549,7 @@ void displaySetup(String banner,
   displayAltVFO(vfoAltfreq);
   displayVFOAB(activeVFO);
   displayTxRx(tx_rx);
-  displayMode(sideband);
+  displayMode(mode);
   displaySplit(split);
   displayIncr(increment);
   displaySMeter(s_meter);

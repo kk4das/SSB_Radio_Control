@@ -1,5 +1,6 @@
 // Button handler
 #include "RadioControl.h"
+#include "ButtonState.h"
 
 //#define BTN_DEBUG
 
@@ -12,111 +13,166 @@ byte TuneButtonState = 0;
 byte lastTuneButtonState = 0;
 
 // Encoder button control
-byte EncButtonState = 0;
-byte lastEncButtonState = 0;
+ButtonState EncButton(ButtonState::LONG_SUPPORT);
 
 //  Sideband select button control
-byte SideBandButtonState = 0;
-byte lastSideBandButtonState = 0;
+ButtonState SideBandButton(ButtonState::NORMAL);
 
 //  Band Switch button control
-byte BandButtonState = 0;
-byte lastBandButtonState = 0;
+ButtonState BandButton(ButtonState::NORMAL);
 
 // VFO select button control
-byte VFOButtonState = 0;
-byte lastVFOButtonState = 0;
+ButtonState VfoButton(ButtonState::NORMAL);
+
 
 // PTT Control
 byte PTTState = 0;
 byte lastPTTState = 0;
 
+// CW Control
+#define CW_TX_OFF_TIMER    500 // milliseconds before releasing TX after cw tx
+unsigned long cw_tx_time = 0;
+
+// Helper function to get sideband from mode
+byte GetSidebandFromMode(byte mode_val) {
+  switch (mode_val) {
+    case L_SSB:
+#ifdef CW
+    case L_CW:
+#endif
+      return LSB;
+    case U_SSB:
+#ifdef CW
+    case U_CW:
+#endif
+      return USB;
+    default:
+      return USB; // Default fallback
+  }
+}
+
+//
+//********************* Set a new mode *************************************
+// new mode select the mode and sets the proper sideband.
+//
+void SetMode(byte new_mode)
+{
+  // Save new mode
+  mode = new_mode;
+  
+  // Get sideband directly from mode
+  byte new_sideband = GetSidebandFromMode(new_mode);
+  
+  // Apply the sideband settings (calls SetSB internally)
+  SetSB(new_sideband);
+  
+  // Save the mode for the current VFO
+  switch (active_vfo) {
+    case VFOA:
+      vfoAmode = mode;
+      break;
+    case VFOB:
+      vfoBmode = mode;
+      break;
+  }
+  
+  // Update the display to show the active mode
+  displayMode(mode);
+}
 
 //*********************Check Band ************************************
 void SwapBand() {
   
   uint32_t freq;
+  byte band_mode;
   
   if (band == BAND20) {          // Switch to 40 Meter Band
-    band=BAND40;
-    sideband=band40Sideband;
-    freq=band40Freq;   
+    band = BAND40;
+    freq = band40Freq;
+    // Determine mode from stored sideband (for backward compatibility)
+    band_mode = (band40Sideband == LSB) ? L_SSB : U_SSB;
   } else {                        // Switch to 20 Meter Band
     band = BAND20;
-    sideband=band20Sideband;
-    freq=band20Freq;
+    freq = band20Freq;
+    // Determine mode from stored sideband (for backward compatibility)
+    band_mode = (band20Sideband == LSB) ? L_SSB : U_SSB;
   }
 
-  // 
-  // Make sure BFO clock tracks with band change
-  //
-  if (sideband == USB) {
-    bfo = USB_BFO;
-  } else { 
-    bfo = LSB_BFO;
-  }  
-
-  //
-  // Change the clock frequency to the new bfo
-  //
-  setBFO(bfo);
-
-  //
   // Set the active VFO to new frequency
-  //
   switch (active_vfo) {
     case VFOA:
-      vfoAfreq=freq;
-      setVFO(vfoAfreq);
+      vfoAfreq = freq;
+      // Keep the VFO's current mode if it matches the band's sideband
+      if (GetSidebandFromMode(vfoAmode) == GetSidebandFromMode(band_mode)) {
+        SetMode(vfoAmode);
+      } else {
+        SetMode(band_mode);
+      }
       displayActVFO(vfoAfreq);
       break;
     case VFOB:
-      vfoBfreq=freq;
-      setVFO(vfoBfreq);
+      vfoBfreq = freq;
+      // Keep the VFO's current mode if it matches the band's sideband
+      if (GetSidebandFromMode(vfoBmode) == GetSidebandFromMode(band_mode)) {
+        SetMode(vfoBmode);
+      } else {
+        SetMode(band_mode);
+      }
       displayActVFO(vfoBfreq);
       break;
   }
 
-  //
-  // Update the display to show the active mode/sideband
-  //
-  displayMode(sideband);
+  displayMode(mode);
   startSettingsTimer();
 }
 
 void CheckBand() {
-  BandButtonState = digitalRead(BAND_BTN);
-  if (BandButtonState != lastBandButtonState) {
-
-    //
-    // On button press, change band 20/40
-    //
-    if (BandButtonState == LOW) { // if button pressed
-
+  if ( BandButton.CheckButton(digitalRead(BAND_BTN)) == ButtonState::PRESSED )
+  {
 #ifdef BTN_DEBUG
-       ToggleLED();
-       String msg = F("CheckBand");
-       displayBanner(msg);
+      ToggleLED();
+      String msg = F("CheckBand");
+      displayBanner(msg);
 #endif      
-      SwapBand();
-    }
+     SwapBand();
+  }
+}
 
-    lastBandButtonState = BandButtonState;
-    Delay(50);
-    BandButtonState = digitalRead(BAND_BTN);  //debounce
+//*********************Change Modes *************************************
+
+void ChangeMode() {
+
+  switch (mode) {
+#ifndef CW
+    case L_SSB:
+      SetMode(U_SSB);
+      break;
+    case U_SSB:
+      SetMode(L_SSB);
+      break;
+#else
+    case L_SSB:
+      SetMode(U_SSB);
+      break;
+    case U_SSB:
+      SetMode(L_CW);
+      break;
+    case L_CW:
+      SetMode(U_CW);
+      break;
+    case U_CW:
+      SetMode(L_SSB);
+      break;
+#endif
   }
 }
 
 
-//*********************Check Sideband ************************************
-void SwapSB() {
-  if (sideband == USB) {          // Switch to LSB
-    sideband = LSB;
-    bfo = LSB_BFO;
-  } else {                        // Switch to USB
-    sideband = USB;
-    bfo = USB_BFO;
-  }
+//*********************Set a new sideband ************************************
+void SetSB(byte sb) {
+
+  sideband = sb;  // Keep this for hardware compatibility
+  bfo = (sb == USB ? USB_BFO : LSB_BFO);
 
   //
   // Keep track of which SSB is currently selected for current band
@@ -138,66 +194,20 @@ void SwapSB() {
   switch (active_vfo) {
     case VFOA:
       setVFO(vfoAfreq);
-      vfoASideband=sideband;
       break;
     case VFOB:
       setVFO(vfoBfreq);
-      vfoBSideband=sideband;
       break;
   }
-
-  //
-  // Update the display to show the active mode/sideband
-  //
-  displayMode(sideband);
+//  displayDebug("save mode="+String(mode));
   startSettingsTimer();
 }
 
-void CheckSB() {
-  SideBandButtonState = digitalRead(SIDEBAND_BTN);
-  if (SideBandButtonState != lastSideBandButtonState) {
-
-    //
-    // On button press, change active sideband
-    //   Set the BFO as appropriate
-    //
-    if (SideBandButtonState == LOW) { // if button pressed
-      SwapSB();
-    }
-
-    lastSideBandButtonState = SideBandButtonState;
-    Delay(50);
-    SideBandButtonState = digitalRead(SIDEBAND_BTN);  //debounce
-  }
+void CheckMode() {
+  if ( SideBandButton.CheckButton(digitalRead(SIDEBAND_BTN)) == ButtonState::PRESSED )
+    ChangeMode();
 }
 
-/*
-//********************* Tune Button Handling ************************************
-void DoTune() {
-  //
-  //
-  // CW experiment - call doCW to turn off BFO, set LO to operating frequencey+700 
-  // Then activate Tx - should generate a carrier
-  //
-  // Does but level is too low to drive the Tx amps
-  //
-
-  displayTune(true);
-
-  setCW();
-  
-  startTx(PTT_TUNE);
-  
-  for (int i = 0; i < 100; i++) {
-//    tone(TONE_PIN, NOTE_B5);
-    Delay(50);
-//    noTone(TONE_PIN);
-    Delay(50);
-  }
-  stopTx();
-  displayTune(false);
-}
-*/
 
 //********************* Tune Button Handling ************************************
 void DoTune() {
@@ -214,15 +224,17 @@ void DoTune() {
   for (int i = 0; i < 100; i++) {
     tone(TONE_PIN, NOTE_B5);
     Delay(50);
-    noTone(TONE_PIN);
+//    noTone(TONE_PIN); // Uncomment for pulsed output
     Delay(50);
   }
+  
+  noTone(TONE_PIN);
   stopTx();
   displayTune(false);
 }
 
 
-
+//*********************Check if Tune Button pressed ****************
 void CheckTune() {
   TuneButtonState = digitalRead(TUNE_BTN); // creates a 10 second tuning pulse trani 50% duty cycle and makes TUNE appear on the screen
   if (TuneButtonState != lastTuneButtonState) {
@@ -237,30 +249,31 @@ void CheckTune() {
 //*********************VFO switch******* VFO A or B ****************
 void SwapVFO() {
   
-  if (active_vfo == VFOA) {
-    active_vfo = VFOB;                // Make VFOB Active
-    sideband=vfoBSideband;
-  } else {
-    active_vfo = VFOA;                // Make VFOA Active
-    sideband=vfoASideband;
+  // Save current VFO mode before switching
+  switch (active_vfo) {
+    case VFOA:
+      vfoAmode = mode;
+      break;
+    case VFOB:
+      vfoBmode = mode;
+      break;
   }
-
-  //
-  // Adjust BFO in case sideband has changed
-  //
-  if (sideband == USB) {          // Switch to LSB
-    bfo = USB_BFO;
-  } else {                        // Switch to USB
-    bfo = LSB_BFO;
-  }
-  setBFO(bfo);
-  displayMode(sideband);               // Change sideband indicator
-
   
+  // Switch to the other VFO and restore its mode
+  if (active_vfo == VFOA) {
+    active_vfo = VFOB;
+    SetMode(vfoBmode);  // This will set mode, sideband, BFO, etc.
+  } else {
+    active_vfo = VFOA;
+    SetMode(vfoAmode);  // This will set mode, sideband, BFO, etc.
+  }
+
 #ifdef BTN_DEBUG
   ToggleLED();
   String msg = F("SwapVFO: active_vfo=");
   msg += active_vfo;
+  msg += F(" mode=");
+  msg += mode;
   displayBanner(msg);
 #endif
  
@@ -269,34 +282,24 @@ void SwapVFO() {
   // 
   switch (active_vfo) {
     case VFOA:
-      setVFO(vfoAfreq);
       displayActVFO(vfoAfreq);
       displayAltVFO(vfoBfreq);
       break;
     case VFOB:
-      setVFO(vfoBfreq);
       displayActVFO(vfoBfreq);
       displayAltVFO(vfoAfreq);
       break;
   }
   displayVFOAB(active_vfo);            // Change the A/B indicator
-  displayMode(sideband);               // Change sideband indicator
   
   startSettingsTimer();
 }
 
 
+//********************* Check if Swap VFO pressed ****************
 void CheckVFO() {
-
-  VFOButtonState = digitalRead(VFO_BTN);
-  if (VFOButtonState != lastVFOButtonState) {
-    if (VFOButtonState == LOW) {       // button pressed
+  if ( VfoButton.CheckButton(digitalRead(VFO_BTN)) == ButtonState::PRESSED )
       SwapVFO();
-    }
-    lastVFOButtonState = VFOButtonState;
-    Delay(50);
-    VFOButtonState = digitalRead(VFO_BTN);  //debounce
-  }
 }
 
 
@@ -360,3 +363,39 @@ void CheckPTT(){
   }
   
 }
+
+#ifdef CW
+//********************* CW key down ****************************
+void CheckCW() {
+  if ( mode != L_CW && mode != U_CW )
+    return;
+
+  CwTxRxState = digitalRead(KEY_IN);
+
+  // Keep the PA up between CW keydowns
+  if ((TxRxState==TX) && (txSource == PTT_CW) && (CwTxRxState != TX)) {
+      if ((millis() - CW_TX_OFF_TIMER) > cw_tx_time) {
+//          displayDebug("");
+          stopTx();
+          digitalWrite(CW_OUT,LOW);
+          setCW(false, CW_TONE);
+      }
+  }
+
+  // Transition states between key up and key down.
+  if(CwTxRxState != lastCwTxRxState){
+      if (CwTxRxState == TX) {
+//          displayDebug("CW TX");
+          setCW(true, CW_TONE);
+          startTx(PTT_CW);            // key the transmitter
+          digitalWrite(CW_OUT,HIGH);  // power the audio amp, switch tune tone as input
+          cw_tx_time = millis();      // reset the PA tx timer.
+          tone(TONE_PIN, CW_TONE);
+      } else {
+          noTone(TONE_PIN);
+      }
+      lastCwTxRxState = CwTxRxState;
+      Delay(50);
+  }
+}
+#endif

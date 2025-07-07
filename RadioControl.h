@@ -1,10 +1,10 @@
 #ifndef RadioControl_h
 #define RadioControl_h
 
+
 #define CALLSIGN "KK4DAS"
-#define VERSION "1.4"
+#define VERSION "2.0"
 #define RIGNAME "SimpleSSB"
-  
 
 //#define DEBUG
 #ifdef DEBUG
@@ -15,30 +15,29 @@
 //=============================== FEATURE SELECTION =========================
 // Each flag below enables optional features
 // DISPLAY_X  - uncomment one line depending on the display that is attached
-// BFOxXMHS   - IF filter center frequency - eitherr 9MHz or 12MHZ
+// BFOxXMHS   - IF filter center frequency - either 9MHz or 12MHZ
 // SMNETER    - Uncomment if S-meter sensor circuit is installed
 // DUAL_BAND  - Uncomment to enable band switching 20/40 if installed
 // CW         - Uncomment if CW mod installed (future)
 
 //=============================== DISPLAY TYPE ==============================
-#define DISPLAY_LCD         //uncomment for 20x4 LCD 
+//#define DISPLAY_LCD         //uncomment for 20x4 LCD
 //#define DISPLAY_TFT         // uncomment for 320x240 TFT
-//#define DISPLAY_NEXTION     //uncomment for 2.8" Nextion
+#define DISPLAY_NEXTION     //uncomment for 2.8" Nextion
 
 //=============================== IF FILTER FREQ ============================
 #define BFO9MHZ              // uncomment for 9.0 MHz  IF
 //#define BFO12MHZ          // uncomment for 12.0 MHz  IF
 
 //=============================== S-METER INSTALLED =========================
-//#define SMETER              // uncomment if SMETER mod installed
+#define SMETER              // uncomment if SMETER mod installed
 
 //=============================== DUAL BAND MOD INSTALLED ===================
-//#define DUAL_BAND           // uncomment if dual band mod installed 20/40 
+#define DUAL_BAND           // uncomment if dual band mod installed 20/40
 
-//=============================== DISPLAY TYPE ==============================
-//#define CW                 // uncomment if CW enabled (not complete)
-
-
+//=============================== CW MODE ===================================
+//#define CW                 // uncomment if CW enabled
+#define CW_TONE 630        // CW tone - adjust to match the CW side tone oscillator frequency
 
 
 //============================== BOARD TYPE (Nano, Every) =====================
@@ -76,11 +75,16 @@
 //                                                                  //
 //////////////////////////////////////////////////////////////////////
 
+
 #define ENCODER_A      2                  // Rotary Lib Default - Encoder pin A  D2 (interrupt pin)
 #define ENCODER_B      3                  // Rotary Lib Default - Encoder pin B  D3 (interrupt pin)
 #define PTT_SENSE      4                  // Detect Mic PT
 #define PTT            5                  // LOW=Rx, HIGH=Tx
 #define TONE_PIN       8                  // Audio out for tune tone
+#ifdef CW
+#define CW_OUT         9                  // CW keyed (out)
+#define KEY_IN        10                  // CW key closure (in)
+#endif
 
 // Dual Band Pins (requires dual band mod)
 #define BAND_BTN       6                  // Band Switch momentary button
@@ -96,6 +100,34 @@
 //  Smeter
 #define SMETER_PIN     A7                 // Requires Signal Strength Sensor
 
+
+// ***************  ALTERNATE PINS DEAN's ARDUINO NANO EVERY BUILD IN ENCLOSURE ********* //
+#define DEAN_BUILD
+#ifdef DEAN_BUILD
+#define ENCODER_A      2                  // Rotary Lib Default - Encoder pin A  D2 (interrupt pin)
+#define ENCODER_B      3                  // Rotary Lib Default - Encoder pin B  D3 (interrupt pin)
+#define ENCODER_BTN    4                  // Rotary Lib Default - Encoder push button
+
+#define PTT_SENSE      A3                 // Detect Mic PT
+#define PTT            5                  // LOW=Rx, HIGH=Tx
+ 
+#define TONE_PIN       7                  // Audio out for tune tone  // Group build setting
+
+// Dual Band Pins (requires dual band mod)
+#define BAND_BTN       A1                  // Band Switch momentary button
+#define BAND_PIN       6                  // Band Switch Relay -  LOW = Band A (40M), HIGH = Band B (20M)
+
+#define VFO_BTN        A6                 // VFO A/B button
+#define SIDEBAND_BTN   A0                 // USB/LSB button
+#define TUNE_BTN       A2                 // Tune Button
+
+#define I2C_SDA        A4                 // I2C SDA Pin
+#define I2C_SCL        A5                 // I2C SCL Pin
+
+//  Smeter
+#define SMETER_PIN     A7                 // Requires Signal Strength Sensor
+#endif
+// ***************  ALTERNATE PINS DEAN's ARDUINO NANO EVERY BUILD IN ENCLOSURE ********* //
 
 //
 // For Nextion / Nano Every Only
@@ -116,7 +148,7 @@
 
 
 // Tune Tone          
-#define NOTE_B5      988                  // Tune tone
+#define NOTE_B5      700                  // Tune tone
 
 //
 // Dual Band Mode Constants (requires DUAL_BAND)
@@ -133,7 +165,14 @@
 #define VFOA 0 
 #define VFOB 1
 
-// Sideband selection
+// Mode selection
+#define U_SSB 0
+#define L_SSB 1
+#define U_CW  2
+#define L_CW  3
+
+
+// Sideband selection (derived from mode)
 #define USB 0
 #define LSB 1
 
@@ -143,9 +182,10 @@
 
 
 // PTT Source
-#define PTT_MIC 0
-#define PTT_CAT 1
+#define PTT_MIC  0
+#define PTT_CAT  1
 #define PTT_TUNE 2
+#define PTT_CW   3
 
 //=============== Globals ============================================
 
@@ -161,8 +201,8 @@ extern const uint32_t BFO_DELTA;         // Difference between USB and LSB for B
 // VFO A/B frequencies
 extern uint32_t vfoAfreq; 
 extern uint32_t vfoBfreq; 
-extern byte vfoASideband;
-extern byte vfoBSideband;
+extern byte vfoAmode;
+extern byte vfoBmode;
 
 // Tuning increment
 extern uint32_t increment;
@@ -170,8 +210,10 @@ extern uint32_t increment;
 // Active VFO indicator
 extern byte active_vfo;
 
+// Active Mode
+extern byte mode;
 
-// Active sideband (USB or LSB)
+// Active sideband (derived from mode, kept for hardware compatibility)
 extern byte sideband;
 
 
@@ -185,9 +227,11 @@ extern byte band;
 
 // Transmit state
 extern byte TxRxState;
-extern byte lastTxRxState; 
+extern byte lastTxRxState;
+extern byte CwTxRxState;
+extern byte lastCwTxRxState;
 
-// Transmoit source (mic, CAT)
+// Transmit source (mic, CW, CAT)
 extern byte txSource;
 
 // S Meter
@@ -203,12 +247,14 @@ extern void setupEncoder();
 extern void setVFO(uint32_t freq);
 extern void setBFO(uint32_t freq);
 extern void CheckIncrement();
-extern void AdvanceIncrement();
+extern void AdvanceIncrement(bool inc);
 extern void CheckEncoder();
 extern void AdjustVFO(long delta);
 
-extern void CheckSB();
-extern void SwapSB();
+extern void CheckMode();
+extern void ChangeMode();
+extern void SetSB(byte sb);
+extern void SetMode(byte new_mode);
 extern void CheckTune();
 extern void DoTune();
 extern void CheckVFO();
@@ -222,8 +268,12 @@ extern void stopSplit();
 extern void CheckBand();    // Only called if DUAL_BAND enabled
 extern void CheckSmeter();  // Only called if SMETER enabled
 
+// Helper functions for mode management
+extern byte GetSidebandFromMode(byte mode_val);
+
 #ifdef CW
-extern void setCW();
+extern void CheckCW();
+extern void setCW(bool on, uint32_t tone);
 #endif
 
 #endif

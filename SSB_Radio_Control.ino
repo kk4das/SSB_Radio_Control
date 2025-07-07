@@ -37,6 +37,26 @@
          * Continuous scanning
          * Split mode
 
+
+   Version 2.0 Release
+   July 7, 2025
+       Merged mode with sideband logic - with assist from Claude.ai
+  
+   January 22, 2023
+       Fix Mode change logic including CAT control
+       
+   March 27, 2022
+       Bring Nextion Display up to date for long press and CW modes
+   March 24, 2022
+       Introduce concept of modes in addition to sideband
+       Implement CW mode of operation
+       Added long press on encoder to decrement tuning step size
+       Added checksum to the EEprom saved memory setting
+
+   Version 1.5
+   December 11 2021
+       Modified S-Meter display for simple LCD display
+
    Version 1.4
    March 9 2021
        Rstored LCD Display Option
@@ -87,10 +107,12 @@ char debugmsg[25];
 //////////////////////////////////////////////////////////////////////
 Si5351 si5351;
 
-// Calibration offest - adjust for variability in the SI5351 module
+// Calibration offset - adjust for variability in the SI5351 module
 // crystal - must be set for the particular SI5351 installed
-//#define CALIBRATION_OFFSET 1190  // Calibration for the SI-5351
-#define CALIBRATION_OFFSET 880  // Calibration for the SI-5351
+#define CALIBRATION_OFFSET 906  // Calibration for the SI-5351 - KK4DAS
+//#define CALIBRATION_OFFSET 1360  // KA4CDN
+
+
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
@@ -104,8 +126,12 @@ const uint32_t LSB_BFO = 11998600L;
 #endif
 
 #ifdef BFO9MHZ
-const uint32_t USB_BFO = 9001500L;
-const uint32_t LSB_BFO = 8998500L;
+//const uint32_t USB_BFO = 9001500L;
+//const uint32_t LSB_BFO = 8998500L;
+#define CENTER_FREQ 8999640L  //KK4DAS
+#define BFO_OFFSET 1500L
+const uint32_t USB_BFO = CENTER_FREQ+BFO_OFFSET;
+const uint32_t LSB_BFO = CENTER_FREQ-BFO_OFFSET;
 #endif
 
 uint32_t bfo = LSB_BFO;                      // Startup BFO frequency
@@ -116,8 +142,16 @@ const uint32_t BFO_DELTA = USB_BFO - LSB_BFO; // Difference between USB and LSB 
 //
 uint32_t vfoAfreq = 7200000L;   //  7.200.000
 uint32_t vfoBfreq = 7074000L;   //  FT-8 7.074.000
+//
+// Startup VFO sidebands
+//
 byte vfoASideband = LSB;
 byte vfoBSideband = USB;
+//
+// Startup VFO modes
+//
+byte vfoAmode = L_SSB;
+byte vfoBmode = U_SSB;
 
 uint32_t increment = 1000;                //  startup VFO tuning increment in HZ.
 
@@ -132,14 +166,15 @@ byte active_vfo = VFOA;  // startup on VFOA
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
-//           Sideband Selection                                     //
+//           Active Sideband and Mode Selection                     //
 //                                                                  //
 //////////////////////////////////////////////////////////////////////
 byte sideband = LSB;      // startup in LSB
+byte mode     = L_SSB;
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
-//           Sideband Selection                                     //
+//           Band Selection                                         //
 //                                                                  //
 /////////////////////////////////////////////////////////////////////
 uint32_t band20Freq = 14200000L;  // 14.200.000
@@ -156,6 +191,8 @@ byte band = BAND40;
 byte TxRxState = RX;          //  startup in RX
 byte lastTxRxState = RX;      //  previous TxRxState
 byte txSource = PTT_MIC;      //  transmit source - Mic, Tune, CAT
+byte CwTxRxState = RX;
+byte lastCwTxRxState = RX;
 
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
@@ -197,17 +234,19 @@ void setBandFilters(int band) {
 //
 // setCW()
 //
-// Experimental code to generate CW tone on key down at 700Hz above the dial frequency
-// Needs a bunch of scaffolding to implement CW mode 
 //
-// Turns off the BFO,  sets the LO to the VFO frequency + 700 
-// 
-// After testing - 
-// tone produced OK but needs an amplifier to get significant power out
-//
-void setCW() {
-  si5351.set_freq(0, 0, SI5351_CLK2);      // turn off BFO
-  si5351.set_freq(vfoAfreq+700L , SI5351_PLL_FIXED, SI5351_CLK0);  // set LO to operating freq
+
+void setCW( bool on, uint32_t tone) {
+  if ( on ) {
+      uint32_t ifInjectFreq = sideband == USB ? bfo - tone : bfo + tone;
+      si5351.clock_enable(SI5351_CLK2, false);
+      si5351.set_freq(ifInjectFreq, 0, SI5351_CLK1);
+      si5351.clock_enable(SI5351_CLK1, true);
+  } else {
+    si5351.clock_enable(SI5351_CLK1,false);
+    setBFO( bfo );
+    si5351.clock_enable(SI5351_CLK2, true);
+  }
 }
 #endif
 
@@ -234,7 +273,17 @@ void setVFO(uint32_t freq) {
   }
 #endif
 
-  si5351.set_freq(freq + bfo, SI5351_PLL_FIXED, SI5351_CLK0);
+  uint32_t listen_freq = freq + bfo;
+#ifdef CW
+  if ( mode == L_CW)
+    listen_freq += CW_TONE;
+  else if ( mode == U_CW)
+        listen_freq -= CW_TONE;
+#endif
+
+//  displayDebug("vfo="+String(listen_freq));
+
+  si5351.set_freq(listen_freq, SI5351_PLL_FIXED, SI5351_CLK0);
   startSettingsTimer();  // start timer to save current settings
 }
 
@@ -258,10 +307,13 @@ void setupPins() {
   pinMode(VFO_BTN, INPUT_PULLUP);                            // VFO A/B Select - momentary button
   pinMode(SIDEBAND_BTN, INPUT_PULLUP);                       // Upper/lower SB Select - momentary button
   pinMode(BAND_BTN, INPUT_PULLUP);                           // Band Switch 20/40 - momentary button
-  pinMode(PTT_SENSE, INPUT_PULLUP);                          // Mic PTT swtich
+  pinMode(PTT_SENSE, INPUT_PULLUP);                          // Mic PTT switch
   pinMode(PTT, OUTPUT);  digitalWrite(PTT, LOW);             // HIGH to enable TX
   pinMode(BAND_PIN, OUTPUT); digitalWrite(BAND_PIN, LOW);    // Band Switch Relay (LOW = NC = 40m,  HIGH = NO = 20m)
-
+#ifdef CW
+  pinMode(KEY_IN, INPUT_PULLUP);                             // CW key input
+  pinMode(CW_OUT, OUTPUT); digitalWrite(CW_OUT, LOW);        // CW Relay (enable audio amp on Tx w/ tune tone as input)
+#endif
   pinMode(LED_BUILTIN, OUTPUT);
 
 }
@@ -274,6 +326,9 @@ void setupSI5351() {
   si5351.set_correction(CALIBRATION_OFFSET);           // calibration offset
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA); // Higher Drive since it is a ADE-1 DBM
+#ifdef CW
+  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_8MA);
+#endif
   si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_8MA);
   si5351.set_freq(bfo, 0, SI5351_CLK2);                // Initialize the bfo
 
@@ -302,6 +357,7 @@ void setup() {
 
   uint32_t vfoActfreq;
   uint32_t vfoAltfreq;
+  bool eeprom_ok;
 
 #ifdef DEBUG
   Serial.begin(57600);
@@ -309,9 +365,10 @@ void setup() {
 
   setupPins();              // Initialize arduino pins
   setupEncoder();           // Initialize interrupt service for rotary encoder
-  setupSettings();          // Retrive settings from EEPROM
+  eeprom_ok = setupSettings();  // Retrieve settings from EEPROM
   setupSI5351();
 
+ 
 
   if (active_vfo == VFOA) {
     vfoActfreq = vfoAfreq;
@@ -344,12 +401,17 @@ void setup() {
                increment,           // Tuning increment
                smeter);            // S Meter
 
+  if ( eeprom_ok == false)
+    displayDebug("Memory Reset");
+
   setupCat();
+
+//  SetMode(L_SSB);  // fix mode XXXXX
 }
 
 void loop() {
 
-  CheckEncoder();   //VFO frequency changes
+  CheckEncoder();   // VFO frequency changes
   CheckIncrement(); // Encoder Button
 
 #ifdef DUAL_BAND
@@ -357,8 +419,11 @@ void loop() {
 #endif
 
   CheckVFO();       // VFO A/B change
-  CheckSB();        // USB/LSB change
+  CheckMode();      // USB/LSB/U_CW/L_CW change
   CheckPTT();       // Check for Mic PTT
+#ifdef CW
+  CheckCW();        // Check for CW key down
+#endif
   CheckTune();      // Check for Tune button press
 
 #ifdef SMETER

@@ -12,9 +12,9 @@ IC746 radio = IC746();
 //#define CAT_DEBUG
 
 // radio modes
-#define MODE_LSB 00
-#define MODE_USB 01
-#define MODE_CW 02
+//#define MODE_LSB 00
+//#define MODE_USB 01
+//#define MODE_CW 02
 
 
 // function to run when we must put radio on TX/RX
@@ -117,26 +117,49 @@ void catSetFreq(long f) {
   startSettingsTimer();
 }
 
-// function to set the mode(LSB or USB) from the cat command
+// function to set the mode(LSB or USB, CW, CW_R) from the cat command
 void catSetMode(byte m) {
-  // If the new mode is different from the current sideband, then swap USB/LSB
-  switch (sideband) {
-    case USB:
-      if (m == MODE_LSB) SwapSB();
+  byte rigMode = 99;
+  switch (m) {
+    case CAT_MODE_LSB:
+      rigMode = L_SSB;
       break;
-    case LSB:
-      if (m == MODE_USB) SwapSB();
+    case CAT_MODE_USB:
+      rigMode = U_SSB;
       break;
+#ifdef CW
+    case CAT_MODE_CW:
+      rigMode = L_CW;
+      break;
+    case CAT_MODE_CW_R:
+      rigMode = U_CW;
+      break;
+#endif
   }
 
+  if (rigMode != 99) {  // Ignore modes that are not suported (AM, FM, RTTY)
+    SetMode(rigMode);   // Single point of control
+  }
+  
 #ifdef CAT_DEBUG
   String msg = F("CatSetMode ");
-  if (sideband == USB ) {
-    msg += F("USB ");
-  } else {
-    msg += F("LSB ");
+  switch (m) {
+    case CAT_MODE_LSB:
+      msg+=F("L_SSB");
+      break;
+    case CAT_MODE_USB:
+      msg+=F("U_SSB");
+      break;
+#ifdef CW
+    case CAT_MODE_CW:
+      msg+=F("L_CW");
+      break;
+    case CAT_MODE_CW_R:
+      msg+=F("U_CW");
+      break;
+#endif
   }
-  msg += m;
+
   displayBanner(msg);
 #endif
 }
@@ -162,29 +185,51 @@ long catGetFreq() {
   return freq;
 }
 
+
 // function to pass the mode to the cat library
 byte catGetMode() {
-  // this must return the mode in the wat the CAT protocol expect it
-  byte mode;
+  // this must return the mode in the way the CAT protocol expect it
+  byte catMode;
 
-  if (sideband == USB) {
-    mode = MODE_USB;
-  } else {
-    mode = MODE_LSB;
+  switch (mode) {
+    case U_SSB:
+      catMode = CAT_MODE_USB;
+      break;
+    case L_SSB:
+      catMode = CAT_MODE_LSB;
+      break;
+#ifdef CW
+    case U_CW:
+      catMode = CAT_MODE_CW_R;
+      break;
+    case L_CW:
+      catMode = CAT_MODE_CW;
+      break;
+#endif
   }
 
 #ifdef CAT_DEBUG
   String msg = F("CatGetMode ");
-  if (sideband == USB ) {
-    msg += F("USB ");
-  } else {
-    msg += F("LSB ");
+  switch (mode) {
+    case U_SSB:
+      msg+=F("USB");
+      break;
+    case L_SSB:
+      msg+=F("LSB");
+      break;
+#ifdef CW
+    case U_CW:
+      msg+=F("CW_R");
+      break;
+    case L_CW:
+      msg+=F("CW");
+      break;
+#endif    
   }
-  msg += mode;
   displayBanner(msg);
 #endif
 
-  return mode;
+  return catMode;
 }
 
 // function to pass the smeter reading in RX mode
@@ -227,11 +272,11 @@ void catVfoAtoB() {
 
   if (active_vfo == VFOA) {
     vfoBfreq = vfoAfreq;
-    vfoBSideband = vfoASideband;
+    vfoBmode = vfoAmode;  // Copy mode instead of sideband
     displayAltVFO(vfoBfreq);
   } else {
     vfoAfreq = vfoBfreq;
-    vfoASideband = vfoBSideband;
+    vfoAmode = vfoBmode;  // Copy mode instead of sideband
     displayAltVFO(vfoAfreq);
   }
 
